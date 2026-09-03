@@ -76,6 +76,15 @@ menu "Library Counter Configuration"
             interpreted as a long press. A short press opens the reset
             confirmation screen; a long press performs a manual NVS save.
 
+    config DEBUG_COUNT
+        int "Debug mode counter value"
+        default 93707
+        range 0 4294967295
+        help
+            The counter value loaded at power-on when the button is held
+            (debug mode). This bypasses any value saved in NVS, which is left
+            untouched until a later manual or automatic save overwrites it.
+
     config RGB_LED_GPIO
         int "Internal RGB LED GPIO"
         default 48

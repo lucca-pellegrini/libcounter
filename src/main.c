@@ -22,6 +22,7 @@ static uint32_t clear_zone_count = 0;
 static uint32_t detect_zone_count = 0;
 
 volatile bool paused = false;
+volatile bool debug_mode = false;
 
 uint32_t get_person_count(void)
 {
@@ -170,30 +171,41 @@ void app_main(void)
 	rgb_init();
 	button_init();
 
-	/* Fun boot sequence: rainbow LED while cycling screens. */
-	uint16_t hue = 0;
-	TickType_t phase_start;
-
-	display_boot_puc();
-	phase_start = xTaskGetTickCount();
-	while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
-		rgb_rainbow(hue);
-		hue = (hue + 5) % 361;
-		vTaskDelay(pdMS_TO_TICKS(20));
+	/* Debug mode: hold the button while powering on to skip the boot sequence,
+	 * ignore any saved count, and start from the magic debug value. */
+	if (button_is_pressed()) {
+		debug_mode = true;
+		person_count = CONFIG_DEBUG_COUNT;
+		ESP_LOGW(TAG, "Debug mode: skipping boot sequence, counter set to %lu",
+			 (unsigned long)CONFIG_DEBUG_COUNT);
 	}
 
-	display_boot_credits();
-	phase_start = xTaskGetTickCount();
-	while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
-		rgb_rainbow(hue);
-		hue = (hue + 5) % 361;
-		vTaskDelay(pdMS_TO_TICKS(20));
-	}
+	/* Boot sequence (skipped in debug mode): rainbow LED while cycling screens. */
+	if (!debug_mode) {
+		uint16_t hue = 0;
+		TickType_t phase_start;
 
-	display_boot_flash();
-	vTaskDelay(pdMS_TO_TICKS(200));
-	display_clear();
-	rgb_off();
+		display_boot_puc();
+		phase_start = xTaskGetTickCount();
+		while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
+			rgb_rainbow(hue);
+			hue = (hue + 5) % 361;
+			vTaskDelay(pdMS_TO_TICKS(20));
+		}
+
+		display_boot_credits();
+		phase_start = xTaskGetTickCount();
+		while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
+			rgb_rainbow(hue);
+			hue = (hue + 5) % 361;
+			vTaskDelay(pdMS_TO_TICKS(20));
+		}
+
+		display_boot_flash();
+		vTaskDelay(pdMS_TO_TICKS(200));
+		display_clear();
+		rgb_off();
+	}
 
 	display_update(person_count, 9999);
 

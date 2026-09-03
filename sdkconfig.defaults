@@ -26,5 +26,8 @@ CONFIG_RGB_LED_GPIO=48
 # Button long-press threshold in ms (short press = reset confirm, long press = manual save)
 CONFIG_BUTTON_LONG_PRESS_MS=500
 
+# Debug mode counter value (used when booting with the button held)
+CONFIG_DEBUG_COUNT=93707
+
 # Interval between NVS saves, in seconds (default 5 minutes; min 60, max 21600)
 CONFIG_NVS_SAVE_INTERVAL_SECONDS=300

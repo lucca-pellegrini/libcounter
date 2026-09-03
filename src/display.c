@@ -12,6 +12,8 @@
 
 static const char *TAG = "display";
 
+extern volatile bool debug_mode;
+
 static ssd1306_handle_t display_handle = NULL;
 static i2c_master_bus_handle_t i2c_bus = NULL;
 
@@ -84,7 +86,7 @@ void display_update(uint32_t count, uint32_t distance_mm)
 
 	if (!initialized) {
 		ssd1306_clear_display(display_handle, false);
-		ssd1306_display_text(display_handle, 1, "PUC Minas", false);
+		ssd1306_display_text(display_handle, 1, debug_mode ? "MODO DEBUG   ;)" : "PUC Minas", false);
 		ssd1306_display_text(display_handle, 7, "Botao p/ zerar", false);
 	} else {
 		if (count_changed) {
