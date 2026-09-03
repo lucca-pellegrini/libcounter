@@ -25,6 +25,9 @@ void display_clear(void);
 // Show a brief "Resetado!" confirmation screen
 void display_show_reset(void);
 
+// Show a brief "Salvo!" confirmation screen after a manual save
+void display_show_saved(void);
+
 // Boot sequence screens
 void display_boot_puc(void);
 void display_boot_credits(void);

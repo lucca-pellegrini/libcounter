@@ -67,6 +67,15 @@ menu "Library Counter Configuration"
         help
             GPIO number for the reset button
 
+    config BUTTON_LONG_PRESS_MS
+        int "Button long-press threshold (ms)"
+        default 500
+        range 200 5000
+        help
+            How long (in ms) the button must be held before a release is
+            interpreted as a long press. A short press opens the reset
+            confirmation screen; a long press performs a manual NVS save.
+
     config RGB_LED_GPIO
         int "Internal RGB LED GPIO"
         default 48

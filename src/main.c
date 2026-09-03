@@ -131,7 +131,7 @@ static void nvs_save_task(void *pvParameters)
 		if (paused)
 			continue;
 
-		if (nvs_util_save_count(get_person_count())) {
+		if (nvs_util_save_count(get_person_count(), false)) {
 			/* Indicate the save with a green blink: 50ms on, 200ms off, 2s */
 			for (int i = 0; i < 8; i++) {
 				rgb_blink_green_slow();
@@ -168,7 +168,7 @@ void app_main(void)
 	sensor_init();
 	display_init();
 	rgb_init();
-	button_init(reset_person_count);
+	button_init();
 
 	/* Fun boot sequence: rainbow LED while cycling screens. */
 	uint16_t hue = 0;

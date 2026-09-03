@@ -20,15 +20,23 @@ static SemaphoreHandle_t button_sem = NULL;
 extern volatile bool paused;
 static bool confirm_active = false;
 
+static volatile TickType_t press_start_tick = 0;
+
 #define DEBOUNCE_MS 300
 #define CONFIRM_WINDOW_MS 5000
 #define RED_HOLD_MS 2000
 
 static void IRAM_ATTR button_isr_handler(void *arg)
 {
-	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	xSemaphoreGiveFromISR(button_sem, &xHigherPriorityTaskWoken);
-	portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	if (gpio_get_level(CONFIG_BUTTON_GPIO) == 0) {
+		/* Button released: wake the task so it can classify the press. */
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		xSemaphoreGiveFromISR(button_sem, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	} else {
+		/* Button pressed: remember when it went down. */
+		press_start_tick = xTaskGetTickCountFromISR();
+	}
 }
 
 static void show_confirm_prompt(void)
@@ -42,70 +50,99 @@ static void show_confirm_prompt(void)
 	}
 }
 
+static void do_manual_save(void)
+{
+	ESP_LOGI(TAG, "Long press - performing manual save");
+	paused = true;
+
+	if (nvs_util_save_count(get_person_count(), true))
+		display_show_saved();
+	else
+		ESP_LOGE(TAG, "Manual save failed");
+
+	/* Green blink: 50ms on, 200ms off, 2s total (matching the auto-save). */
+	for (int i = 0; i < 8; i++) {
+		rgb_blink_green_slow();
+		vTaskDelay(pdMS_TO_TICKS(50));
+		rgb_blink_green_slow();
+		vTaskDelay(pdMS_TO_TICKS(200));
+	}
+	rgb_off();
+
+	display_invalidate();
+	paused = false;
+}
+
+static void do_confirm_reset(void)
+{
+	ESP_LOGI(TAG, "Short press - entering reset confirm window");
+	confirm_active = true;
+	paused = true;
+	show_confirm_prompt();
+
+	/* Blink red slowly while waiting for a separate second press within 5s. */
+	TickType_t window_end = xTaskGetTickCount() + pdMS_TO_TICKS(CONFIRM_WINDOW_MS);
+	bool confirmed = false;
+
+	while (xTaskGetTickCount() < window_end) {
+		rgb_blink_red_slow();
+		/* A second press+release gives the semaphore; take it within the window. */
+		if (xSemaphoreTake(button_sem, pdMS_TO_TICKS(250)) == pdTRUE) {
+			confirmed = true;
+			break;
+		}
+	}
+
+	if (confirmed) {
+		ESP_LOGI(TAG, "Second press - reset confirmed");
+		reset_person_count();
+		nvs_util_clear_count();
+		display_show_reset();
+		rgb_set_red();
+		vTaskDelay(pdMS_TO_TICKS(RED_HOLD_MS));
+		rgb_off();
+		ESP_LOGI(TAG, "Counter reset, resuming normal operation");
+	} else {
+		ESP_LOGI(TAG, "Confirm window expired, no reset");
+		rgb_off();
+	}
+
+	display_invalidate();
+	confirm_active = false;
+	paused = false;
+
+	/* Drain any button presses queued during the window. */
+	xSemaphoreTake(button_sem, 0);
+}
+
 static void button_task(void *arg)
 {
 	ESP_LOGI(TAG, "Button task started");
 
-	TickType_t last_valid_press = 0;
+	TickType_t last_release = 0;
 
 	for (;;) {
-		/* Wait for the first press (ISR signals the semaphore) */
+		/* Wake on the button release edge. */
 		if (xSemaphoreTake(button_sem, portMAX_DELAY) != pdTRUE)
 			continue;
 
 		TickType_t now = xTaskGetTickCount();
-		if (pdTICKS_TO_MS(now - last_valid_press) < DEBOUNCE_MS)
+
+		/* Debounce: ignore releases too close to the previous one. */
+		if (pdTICKS_TO_MS(now - last_release) < DEBOUNCE_MS)
 			continue;
-		last_valid_press = now;
+		last_release = now;
 
-		ESP_LOGI(TAG, "First button press - entering reset confirm window");
-		confirm_active = true;
-		paused = true;
-		show_confirm_prompt();
-
-		/* Blink red slowly while waiting for a second press within 5s */
-		TickType_t window_end = now + pdMS_TO_TICKS(CONFIRM_WINDOW_MS);
-		bool confirmed = false;
-
-		while (xTaskGetTickCount() < window_end) {
-			rgb_blink_red_slow();
-			vTaskDelay(pdMS_TO_TICKS(250));
-
-			/* Poll for a second press during the window */
-			if (gpio_get_level(CONFIG_BUTTON_GPIO) == 1) {
-				TickType_t press_now = xTaskGetTickCount();
-				if (pdTICKS_TO_MS(press_now - last_valid_press) >= DEBOUNCE_MS) {
-					last_valid_press = press_now;
-					confirmed = true;
-					break;
-				}
-			}
-		}
-
-		if (confirmed) {
-			ESP_LOGI(TAG, "Second press - reset confirmed");
-			reset_person_count();
-			nvs_util_clear_count();
-			display_show_reset();
-			rgb_set_red();
-			vTaskDelay(pdMS_TO_TICKS(RED_HOLD_MS));
-			rgb_off();
-			ESP_LOGI(TAG, "Counter reset, resuming normal operation");
-		} else {
-			ESP_LOGI(TAG, "Confirm window expired, no reset");
-			rgb_off();
-		}
-
-		display_invalidate();
-		confirm_active = false;
-		paused = false;
-
-		/* Drain any button presses queued during the window */
-		xSemaphoreTake(button_sem, 0);
+		/* Classify the press by how long it was held. */
+		uint32_t hold_ms = pdTICKS_TO_MS(now - press_start_tick);
+		if (hold_ms >= CONFIG_BUTTON_LONG_PRESS_MS)
+			do_manual_save();
+		else
+			do_confirm_reset();
 	}
 }
 
-void button_init(void (*reset_callback)(void))
+void button_init(void)
 {
 	button_sem = xSemaphoreCreateBinary();
 	assert(button_sem != NULL);
@@ -114,7 +151,7 @@ void button_init(void (*reset_callback)(void))
 	assert(ret == pdPASS);
 
 	gpio_config_t io_conf = {
-		.intr_type = GPIO_INTR_POSEDGE,
+		.intr_type = GPIO_INTR_ANYEDGE,
 		.pin_bit_mask = (1ULL << CONFIG_BUTTON_GPIO),
 		.mode = GPIO_MODE_INPUT,
 		.pull_up_en = GPIO_PULLUP_DISABLE,

@@ -133,6 +133,15 @@ void display_show_reset(void)
 	ssd1306_display_text(display_handle, 3, "  Zerado!", true);
 }
 
+void display_show_saved(void)
+{
+	if (display_handle == NULL)
+		return;
+
+	ssd1306_clear_display(display_handle, true);
+	ssd1306_display_text(display_handle, 3, "  Salvo!", true);
+}
+
 void display_boot_puc(void)
 {
 	if (display_handle == NULL)

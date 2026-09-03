@@ -48,12 +48,12 @@ uint32_t nvs_util_load_count(void)
 	return count;
 }
 
-bool nvs_util_save_count(uint32_t count)
+bool nvs_util_save_count(uint32_t count, bool force)
 {
 	if (!nvs_ready)
 		return false;
 
-	if (has_last_saved && last_saved == count) {
+	if (!force && has_last_saved && last_saved == count) {
 		ESP_LOGD(TAG, "Count unchanged (%lu), skipping NVS write", (unsigned long)count);
 		return false;
 	}

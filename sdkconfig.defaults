@@ -23,5 +23,8 @@ CONFIG_LOG_DEFAULT_LEVEL=3
 # Internal RGB LED (NeoPixel/WS2812) data line on GPIO48
 CONFIG_RGB_LED_GPIO=48
 
+# Button long-press threshold in ms (short press = reset confirm, long press = manual save)
+CONFIG_BUTTON_LONG_PRESS_MS=500
+
 # Interval between NVS saves, in seconds (default 5 minutes; min 60, max 21600)
 CONFIG_NVS_SAVE_INTERVAL_SECONDS=300
