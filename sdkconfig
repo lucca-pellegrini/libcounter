@@ -995,8 +995,7 @@ CONFIG_OLED_I2C_SCL_GPIO=9
 CONFIG_OLED_I2C_SDA_GPIO=8
 # default:
 CONFIG_BUTTON_GPIO=5
-# default:
-CONFIG_RGB_LED_GPIO=38
+CONFIG_RGB_LED_GPIO=48
 # end of Library Counter Configuration
 
 #

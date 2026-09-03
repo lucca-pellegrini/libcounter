@@ -14,6 +14,16 @@ static const char *TAG = "display";
 static ssd1306_handle_t display_handle = NULL;
 static i2c_master_bus_handle_t i2c_bus = NULL;
 
+static bool initialized = false;
+static uint32_t last_count;
+static uint32_t last_distance_mm;
+static TickType_t last_refresh;
+
+ssd1306_handle_t display_get_handle(void)
+{
+	return display_handle;
+}
+
 void display_init(void)
 {
 	// Initialize I2C master bus (new driver API)
@@ -43,15 +53,15 @@ void display_init(void)
 	ESP_LOGI(TAG, "OLED display initialized on SCL:%d, SDA:%d", CONFIG_OLED_I2C_SCL_GPIO, CONFIG_OLED_I2C_SDA_GPIO);
 }
 
+void display_invalidate(void)
+{
+	initialized = false;
+}
+
 void display_update(uint32_t count, uint32_t distance_mm)
 {
 	if (display_handle == NULL)
 		return;
-
-	static bool initialized = false;
-	static uint32_t last_count;
-	static uint32_t last_distance_mm;
-	static TickType_t last_refresh;
 
 	TickType_t now = xTaskGetTickCount();
 
@@ -100,4 +110,13 @@ void display_clear(void)
 {
 	if (display_handle)
 		ssd1306_clear_display(display_handle, false);
+}
+
+void display_show_reset(void)
+{
+	if (display_handle == NULL)
+		return;
+
+	ssd1306_clear_display(display_handle, false);
+	ssd1306_display_text(display_handle, 3, "Resetado!", false);
 }

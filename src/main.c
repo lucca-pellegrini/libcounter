@@ -9,14 +9,18 @@
 #include "sensor.h"
 #include "display.h"
 #include "button.h"
+#include "led.h"
 
 static const char *TAG = "main";
 
 static uint32_t person_count = 0;
 static SemaphoreHandle_t count_mutex = NULL;
+static SemaphoreHandle_t display_mutex = NULL;
 static bool person_was_detected = false;
 static uint32_t clear_zone_count = 0;
 static uint32_t detect_zone_count = 0;
+
+volatile bool paused = false;
 
 uint32_t get_person_count(void)
 {
@@ -48,10 +52,13 @@ static void sensor_task(void *pvParameters)
 	const TickType_t xDelay = pdMS_TO_TICKS(CONFIG_ULTRASONIC_MEASURE_INTERVAL_MS);
 
 	for (;;) {
-		// Update sensor reading
+		if (paused) {
+			vTaskDelay(xDelay);
+			continue;
+		}
+
 		sensor_update();
 
-		// Check for person detection with hysteresis
 		bool person_detected = sensor_person_detected();
 		uint32_t avg_mm = sensor_get_averaged_distance();
 
@@ -59,21 +66,22 @@ static void sensor_task(void *pvParameters)
 			 (unsigned long)avg_mm, CONFIG_ULTRASONIC_THRESHOLD_CM * 10);
 
 		if (person_detected && !person_was_detected) {
-			// Person possibly entered the detection zone. Require several
-			// consecutive below-threshold readings before confirming, so that
-			// noise near the boundary doesn't cause false counts.
 			detect_zone_count++;
 			if (detect_zone_count >= CONFIG_ULTRASONIC_CONFIRM_READS) {
-				// Person confirmed in the detection zone
 				increment_person_count();
 				person_was_detected = true;
 				clear_zone_count = 0;
 
-				// Update display immediately
+				rgb_set_blue();
+
+				xSemaphoreTake(display_mutex, portMAX_DELAY);
 				display_update(get_person_count(), avg_mm);
+				xSemaphoreGive(display_mutex);
+
+				vTaskDelay(pdMS_TO_TICKS(1000));
+				rgb_off();
 			}
 		} else if (!person_detected && person_was_detected) {
-			// Count consecutive above-threshold readings before allowing recount
 			clear_zone_count++;
 			if (clear_zone_count >= CONFIG_ULTRASONIC_COOLDOWN_READS) {
 				person_was_detected = false;
@@ -83,10 +91,8 @@ static void sensor_task(void *pvParameters)
 					 (unsigned long)CONFIG_ULTRASONIC_COOLDOWN_READS);
 			}
 		} else if (person_detected && person_was_detected) {
-			// Still detected — reset the clear zone counter
 			clear_zone_count = 0;
 		} else {
-			// Not detected and not was-detected — reset detection confirm counter
 			detect_zone_count = 0;
 		}
 
@@ -96,11 +102,18 @@ static void sensor_task(void *pvParameters)
 
 static void display_task(void *pvParameters)
 {
-	const TickType_t xDelay = pdMS_TO_TICKS(500); // Update display every 500ms
+	const TickType_t xDelay = pdMS_TO_TICKS(500);
 
 	for (;;) {
-		uint32_t avg_mm = sensor_get_averaged_distance();
-		display_update(get_person_count(), avg_mm);
+		if (paused) {
+			vTaskDelay(xDelay);
+			continue;
+		}
+
+		xSemaphoreTake(display_mutex, portMAX_DELAY);
+		display_update(get_person_count(), sensor_get_averaged_distance());
+		xSemaphoreGive(display_mutex);
+
 		vTaskDelay(xDelay);
 	}
 }
@@ -111,22 +124,25 @@ void app_main(void)
 	ESP_LOGI(TAG, "Detection threshold: %d cm", CONFIG_ULTRASONIC_THRESHOLD_CM);
 	ESP_LOGI(TAG, "Measurement interval: %d ms", CONFIG_ULTRASONIC_MEASURE_INTERVAL_MS);
 
-	// Create mutex for thread-safe counter access
 	count_mutex = xSemaphoreCreateMutex();
 	if (!count_mutex) {
-		ESP_LOGE(TAG, "Failed to create mutex");
+		ESP_LOGE(TAG, "Failed to create count mutex");
 		return;
 	}
 
-	// Initialize hardware
+	display_mutex = xSemaphoreCreateMutex();
+	if (!display_mutex) {
+		ESP_LOGE(TAG, "Failed to create display mutex");
+		return;
+	}
+
 	sensor_init();
 	display_init();
+	rgb_init();
 	button_init(reset_person_count);
 
-	// Display initial count
 	display_update(0, 4500);
 
-	// Create tasks
 	xTaskCreate(sensor_task, "sensor_task", 4096, NULL, 10, NULL);
 	xTaskCreate(display_task, "display_task", 4095, NULL, 5, NULL);
 
