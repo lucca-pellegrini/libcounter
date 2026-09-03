@@ -21,7 +21,7 @@ static SemaphoreHandle_t button_sem = NULL;
  * can be skipped as soon as the button is touched. */
 static SemaphoreHandle_t press_sem = NULL;
 
-extern volatile bool paused;
+extern volatile app_state_t app_state;
 static bool confirm_active = false;
 static volatile bool actions_allowed = false;
 
@@ -61,31 +61,19 @@ static void show_confirm_prompt(void)
 static void do_manual_save(void)
 {
 	ESP_LOGI(TAG, "Long press - performing manual save");
-	paused = true;
 
+	/* A manual save always writes, then plays the shared feedback. */
 	if (nvs_util_save_count(get_person_count(), true))
-		display_show_saved();
+		do_save_feedback();
 	else
 		ESP_LOGE(TAG, "Manual save failed");
-
-	/* Green blink: 50ms on, 200ms off, 2s total (matching the auto-save). */
-	for (int i = 0; i < 8; i++) {
-		rgb_blink_green_slow();
-		vTaskDelay(pdMS_TO_TICKS(50));
-		rgb_blink_green_slow();
-		vTaskDelay(pdMS_TO_TICKS(200));
-	}
-	rgb_off();
-
-	display_invalidate();
-	paused = false;
 }
 
 static void do_confirm_reset(void)
 {
 	ESP_LOGI(TAG, "Short press - entering reset confirm window");
 	confirm_active = true;
-	paused = true;
+	app_state = APP_STATE_PAUSED;
 	show_confirm_prompt();
 
 	/* Blink red slowly while waiting for a separate second press within 5s. */
@@ -117,7 +105,7 @@ static void do_confirm_reset(void)
 
 	display_invalidate();
 	confirm_active = false;
-	paused = false;
+	app_state = APP_STATE_RUNNING;
 
 	/* Drain any button presses queued during the window. */
 	xSemaphoreTake(button_sem, 0);
@@ -149,6 +137,10 @@ static void button_task(void *arg)
 
 		/* Classify the press by how long it was held. */
 		uint32_t hold_ms = pdTICKS_TO_MS(now - press_start_tick);
+		if (app_state == APP_STATE_SAVING) {
+			ESP_LOGI(TAG, "Press during save ignored");
+			continue;
+		}
 		if (hold_ms >= CONFIG_BUTTON_LONG_PRESS_MS)
 			do_manual_save();
 		else

@@ -12,7 +12,7 @@ static led_strip_handle_t strip = NULL;
 static bool red_blink_state = false;
 static bool green_blink_state = false;
 
-#define BRIGHTNESS 128
+#define BRIGHTNESS 75
 
 void rgb_init(void)
 {
@@ -69,6 +69,11 @@ void rgb_set_orange(void)
 void rgb_set_green(void)
 {
 	rgb_set(0, BRIGHTNESS, 0);
+}
+
+void rgb_set_white(void)
+{
+	rgb_set(-1, -1, -1);
 }
 
 void rgb_rainbow(uint16_t hue)

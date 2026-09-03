@@ -163,8 +163,8 @@ void display_boot_credits(void)
 
 	ssd1306_clear_display(display_handle, false);
 	ssd1306_display_text(display_handle, 1, "Copyright 2026", false);
-	ssd1306_display_text(display_handle, 3, "Lucca Pellegrini", false);
-	ssd1306_display_text(display_handle, 4, "Felipe Lara", false);
+	ssd1306_display_text(display_handle, 3, "Prf. Felipe Lara", false);
+	ssd1306_display_text(display_handle, 4, "Lucca Pellegrini", false);
 	ssd1306_display_text(display_handle, 6, "Engenharia de", false);
 	ssd1306_display_text(display_handle, 7, "Computacao", false);
 }

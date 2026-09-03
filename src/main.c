@@ -1,4 +1,5 @@
 #include "freertos/FreeRTOS.h"
+#include "freertos/projdefs.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
@@ -21,7 +22,7 @@ static bool person_was_detected = false;
 static uint32_t clear_zone_count = 0;
 static uint32_t detect_zone_count = 0;
 
-volatile bool paused = false;
+volatile app_state_t app_state = APP_STATE_RUNNING;
 volatile bool debug_mode = false;
 static volatile bool boot_anim_done = false;
 
@@ -55,7 +56,7 @@ static void sensor_task(void *pvParameters)
 	const TickType_t xDelay = pdMS_TO_TICKS(CONFIG_ULTRASONIC_MEASURE_INTERVAL_MS);
 
 	for (;;) {
-		if (paused) {
+		if (app_state == APP_STATE_PAUSED) {
 			vTaskDelay(xDelay);
 			continue;
 		}
@@ -75,14 +76,18 @@ static void sensor_task(void *pvParameters)
 				person_was_detected = true;
 				clear_zone_count = 0;
 
-				rgb_set_blue();
+				/* While saving, suppress the count LED feedback and defer the
+				 * display draw; the count itself must still be recorded. */
+				if (app_state != APP_STATE_SAVING) {
+					rgb_set_blue();
 
-				xSemaphoreTake(display_mutex, portMAX_DELAY);
-				display_update(get_person_count(), avg_mm);
-				xSemaphoreGive(display_mutex);
+					xSemaphoreTake(display_mutex, portMAX_DELAY);
+					display_update(get_person_count(), avg_mm);
+					xSemaphoreGive(display_mutex);
 
-				vTaskDelay(pdMS_TO_TICKS(200));
-				rgb_set_orange();
+					vTaskDelay(pdMS_TO_TICKS(200));
+					rgb_set_orange();
+				}
 			}
 		} else if (!person_detected && person_was_detected) {
 			clear_zone_count++;
@@ -109,7 +114,9 @@ static void display_task(void *pvParameters)
 	const TickType_t xDelay = pdMS_TO_TICKS(500);
 
 	for (;;) {
-		if (paused) {
+		/* Only refresh in RUNNING; in PAUSED/SAVING the screen is owned by the
+		 * reset/save animations and must not be overwritten. */
+		if (app_state != APP_STATE_RUNNING) {
 			vTaskDelay(xDelay);
 			continue;
 		}
@@ -127,23 +134,43 @@ static void nvs_save_task(void *pvParameters)
 	const TickType_t xDelay = pdMS_TO_TICKS(CONFIG_NVS_SAVE_INTERVAL_SECONDS * 1000);
 
 	for (;;) {
-		/* Wait fixed interval regardless of paused state */
+		/* Wait fixed interval regardless of state */
 		vTaskDelay(xDelay);
 
-		if (paused)
+		/* Only save during normal operation. */
+		if (app_state != APP_STATE_RUNNING)
 			continue;
 
-		if (nvs_util_save_count(get_person_count(), false)) {
-			/* Indicate the save with a green blink: 50ms on, 200ms off, 2s */
-			for (int i = 0; i < 8; i++) {
-				rgb_blink_green_slow();
-				vTaskDelay(pdMS_TO_TICKS(50));
-				rgb_blink_green_slow();
-				vTaskDelay(pdMS_TO_TICKS(200));
-			}
-			rgb_off();
-		}
+		if (nvs_util_save_count(get_person_count(), false))
+			do_save_feedback();
 	}
+}
+
+/* Play the save feedback: green blink + "Salvo!" screen. While active the
+ * sensor keeps counting (no missed passers-by) but the count-increment LED and
+ * display refresh are suppressed so the animation is not disturbed. */
+void do_save_feedback(void)
+{
+	app_state = APP_STATE_SAVING;
+
+	xSemaphoreTake(display_mutex, portMAX_DELAY);
+	display_show_saved();
+	xSemaphoreGive(display_mutex);
+
+	/* Green blink: 50ms on, 200ms off, 2s total. */
+	for (int i = 0; i < 8; i++) {
+		rgb_blink_green_slow();
+		vTaskDelay(pdMS_TO_TICKS(50));
+		rgb_blink_green_slow();
+		vTaskDelay(pdMS_TO_TICKS(200));
+	}
+	rgb_off();
+
+	xSemaphoreTake(display_mutex, portMAX_DELAY);
+	display_invalidate();
+	xSemaphoreGive(display_mutex);
+
+	app_state = APP_STATE_RUNNING;
 }
 
 /* Play the boot animation (rainbow LED cycling the PUC/credits screens). Runs as
@@ -153,25 +180,42 @@ static void boot_animation_task(void *arg)
 	uint16_t hue = 0;
 	TickType_t phase_start;
 
+	rgb_off();
+	vTaskDelay(pdMS_TO_TICKS(500));
+	rgb_set_white();
+	vTaskDelay(pdMS_TO_TICKS(25));
+	rgb_off();
+	vTaskDelay(pdMS_TO_TICKS(475));
+
 	display_boot_puc();
+
+	vTaskDelay(pdMS_TO_TICKS(1000));
+	rgb_set_orange();
+	vTaskDelay(pdMS_TO_TICKS(1000));
 	phase_start = xTaskGetTickCount();
-	while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
+	while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(1500)) {
 		rgb_rainbow(hue);
-		hue = (hue + 5) % 361;
+		hue = (hue + 12) % 361;
 		vTaskDelay(pdMS_TO_TICKS(20));
 	}
+	rgb_off();
+	vTaskDelay(pdMS_TO_TICKS(1500));
 
 	display_boot_credits();
 	phase_start = xTaskGetTickCount();
-	while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
-		rgb_rainbow(hue);
-		hue = (hue + 5) % 361;
-		vTaskDelay(pdMS_TO_TICKS(20));
-	}
+	vTaskDelay(pdMS_TO_TICKS(5000));
 
 	display_boot_flash();
 	vTaskDelay(pdMS_TO_TICKS(200));
 	display_clear();
+	rgb_off();
+	vTaskDelay(pdMS_TO_TICKS(200));
+	rgb_set_white();
+	vTaskDelay(pdMS_TO_TICKS(25));
+	rgb_off();
+	vTaskDelay(pdMS_TO_TICKS(75));
+	rgb_set_white();
+	vTaskDelay(pdMS_TO_TICKS(25));
 	rgb_off();
 
 	boot_anim_done = true;
