@@ -38,9 +38,17 @@ static const char *TAG = "sensor";
 #define ECHO_TIMEOUT_US 30000 /* 30ms max echo time (~5m range) */
 #define SPEED_OF_SOUND_MM_US 0.343f /* mm per microsecond at ~20°C */
 
+/* Delay added before re-measuring after a close-object (saturated) reading,
+ * giving the sensor time to reset its ECHO line. */
+#define RECOVERY_DELAY_MS 200
+
 /* Valid measurement range (sensor physical limits) */
 #define DIST_MIN_MM 100
 #define DIST_MAX_MM 4500
+
+/* Sentinel for an object too close to resolve reliably (sensor saturated).
+ * Used when the echo is abnormal because something is directly in front. */
+#define DIST_CLOSE_MM 0
 
 /* Rolling average buffer */
 #define BUFFER_SIZE 3
@@ -52,7 +60,7 @@ static bool buffer_filled = false;
 static volatile int64_t echo_start_time = 0;
 static volatile int64_t echo_end_time = 0;
 static volatile bool echo_received = false;
-static volatile uint32_t isr_call_count = 0;  /* Debug: count ISR invocations */
+static volatile uint32_t isr_call_count = 0; /* Debug: count ISR invocations */
 static volatile uint32_t rising_edge_count = 0;
 static volatile uint32_t falling_edge_count = 0;
 static SemaphoreHandle_t echo_sem = NULL;
@@ -158,22 +166,29 @@ static uint32_t sensor_measure(void)
 	/* Wait for echo with timeout */
 	if (xSemaphoreTake(echo_sem, pdMS_TO_TICKS(ECHO_TIMEOUT_US / 1000 + 10)) != pdTRUE) {
 		int echo_level_now = gpio_get_level(ECHO_GPIO);
-		ESP_LOGW(TAG, "Echo timeout! ECHO pin: before=%d after_trig=%d now=%d | ISR calls: %lu (+%lu) rising: %lu (+%lu) falling: %lu (+%lu)",
-			 echo_level_before, echo_level_after, echo_level_now,
-			 (unsigned long)isr_call_count, (unsigned long)(isr_call_count - isr_before),
-			 (unsigned long)rising_edge_count, (unsigned long)(rising_edge_count - rising_before),
-			 (unsigned long)falling_edge_count, (unsigned long)(falling_edge_count - falling_before));
+		ESP_LOGW(
+			TAG,
+			"Echo timeout! ECHO pin: before=%d after_trig=%d now=%d | ISR calls: %lu (+%lu) rising: %lu (+%lu) falling: %lu (+%lu)",
+			echo_level_before, echo_level_after, echo_level_now, (unsigned long)isr_call_count,
+			(unsigned long)(isr_call_count - isr_before), (unsigned long)rising_edge_count,
+			(unsigned long)(rising_edge_count - rising_before), (unsigned long)falling_edge_count,
+			(unsigned long)(falling_edge_count - falling_before));
+		/* If ECHO is still held high, the sensor is saturated by a very
+		 * close object -> count it as a close detection, not "nothing". */
+		if (echo_level_now == 1)
+			return DIST_CLOSE_MM;
 		return DIST_MAX_MM;
 	}
 
 	/* Check if we got a valid echo */
 	if (!echo_received || echo_start_time == 0 || echo_end_time <= echo_start_time) {
 		ESP_LOGW(TAG, "Invalid echo: received=%d start=%lld end=%lld | ISR +%lu rising +%lu falling +%lu",
-			 echo_received, echo_start_time, echo_end_time,
-			 (unsigned long)(isr_call_count - isr_before),
+			 echo_received, echo_start_time, echo_end_time, (unsigned long)(isr_call_count - isr_before),
 			 (unsigned long)(rising_edge_count - rising_before),
 			 (unsigned long)(falling_edge_count - falling_before));
-		return DIST_MAX_MM;
+		/* Abnormal echo (missing/zero start) happens when something is so
+		 * close the edge was missed -> treat as a close detection. */
+		return DIST_CLOSE_MM;
 	}
 
 	/* Calculate pulse width and distance */
@@ -206,8 +221,13 @@ void sensor_update(void)
 		buffer_filled = true;
 
 	if (distance < DIST_MAX_MM)
-		ESP_LOGI(TAG, "dist=%lumm avg=%lumm thr=%dcm", (unsigned long)distance,
+		ESP_LOGD(TAG, "dist=%lumm avg=%lumm thr=%dcm", (unsigned long)distance,
 			 (unsigned long)sensor_get_averaged_distance(), CONFIG_ULTRASONIC_THRESHOLD_CM);
+
+	/* A close detection saturated the sensor; give it a moment to recover
+	 * before triggering again, otherwise it keeps failing in a tight loop. */
+	if (distance == DIST_CLOSE_MM)
+		vTaskDelay(pdMS_TO_TICKS(RECOVERY_DELAY_MS));
 }
 
 uint32_t sensor_get_distance(void)
@@ -230,5 +250,10 @@ uint32_t sensor_get_averaged_distance(void)
 bool sensor_person_detected(void)
 {
 	/* Threshold is in cm (from Kconfig), sensor returns mm */
-	return sensor_get_averaged_distance() < ((uint32_t)CONFIG_ULTRASONIC_THRESHOLD_CM * 10);
+	if (sensor_get_averaged_distance() < ((uint32_t)CONFIG_ULTRASONIC_THRESHOLD_CM * 10))
+		return true;
+
+	/* A close-object (saturated) reading on the latest sample means someone is
+	 * right in front, even if the rolling average hasn't dropped yet. */
+	return sensor_get_distance() == DIST_CLOSE_MM;
 }

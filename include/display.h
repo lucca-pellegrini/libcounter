@@ -11,8 +11,10 @@ void display_init(void);
 // Get the SSD1306 handle (for direct text rendering)
 ssd1306_handle_t display_get_handle(void);
 
-// Update the display with counter and live distance (mm)
-void display_update(uint32_t count, uint32_t distance_mm);
+// Update the display with counter and live distance (mm).
+// 'odd' indicates that the internal (un-divided) count is odd, which draws a
+// small marker in the top-right corner to signal someone came through.
+void display_update(uint32_t count, uint32_t distance_mm, bool odd);
 
 // Force the next display_update to redraw the full screen
 void display_invalidate(void);

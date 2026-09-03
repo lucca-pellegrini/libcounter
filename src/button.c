@@ -2,6 +2,7 @@
 #include "led.h"
 #include "display.h"
 #include "libcounter.h"
+#include "nvs_util.h"
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -37,7 +38,7 @@ static void show_confirm_prompt(void)
 		ssd1306_clear_display(h, false);
 		ssd1306_display_text(h, 2, "Pressione", false);
 		ssd1306_display_text(h, 3, "novamente", false);
-		ssd1306_display_text(h, 4, "para resetar!", false);
+		ssd1306_display_text(h, 4, "para zerar!", false);
 	}
 }
 
@@ -84,6 +85,7 @@ static void button_task(void *arg)
 		if (confirmed) {
 			ESP_LOGI(TAG, "Second press - reset confirmed");
 			reset_person_count();
+			nvs_util_clear_count();
 			display_show_reset();
 			rgb_set_red();
 			vTaskDelay(pdMS_TO_TICKS(RED_HOLD_MS));

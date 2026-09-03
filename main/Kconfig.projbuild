@@ -74,4 +74,13 @@ menu "Library Counter Configuration"
             GPIO number for the ESP32-S3 DevKit built-in RGB LED
             (NeoPixel/WS2812, data line on GPIO48)
 
+    config NVS_SAVE_INTERVAL_SECONDS
+        int "Interval between NVS saves (seconds)"
+        default 300
+        range 60 21600
+        help
+            How often to persist the current person count to NVS, in seconds.
+            The save is skipped if the count is unchanged since the last save.
+            Minimum 60 (1 minute), maximum 21600 (6 hours).
+
 endmenu

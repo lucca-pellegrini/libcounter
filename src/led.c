@@ -9,7 +9,10 @@
 static const char *TAG = "led";
 
 static led_strip_handle_t strip = NULL;
-static bool blink_state = false;
+static bool red_blink_state = false;
+static bool green_blink_state = false;
+
+#define BRIGHTNESS 80
 
 void rgb_init(void)
 {
@@ -40,28 +43,50 @@ void rgb_off(void)
 		led_strip_clear(strip);
 }
 
-void rgb_set_blue(void)
+static void rgb_set(uint32_t red, uint32_t green, uint32_t blue)
 {
 	if (strip) {
-		led_strip_set_pixel(strip, 0, 0, 0, 80);
+		led_strip_set_pixel(strip, 0, red, green, blue);
 		led_strip_refresh(strip);
 	}
+}
+
+void rgb_set_blue(void)
+{
+	rgb_set(0, 0, BRIGHTNESS);
 }
 
 void rgb_set_red(void)
 {
-	if (strip) {
-		led_strip_set_pixel(strip, 0, 80, 0, 0);
-		led_strip_refresh(strip);
-	}
+	rgb_set(BRIGHTNESS, 0, 0);
+}
+
+void rgb_set_orange(void)
+{
+	rgb_set(BRIGHTNESS, BRIGHTNESS / 2, 0);
+}
+
+void rgb_set_green(void)
+{
+	rgb_set(0, BRIGHTNESS, 0);
 }
 
 bool rgb_blink_red_slow(void)
 {
-	blink_state = !blink_state;
-	if (blink_state)
+	red_blink_state = !red_blink_state;
+	if (red_blink_state)
 		rgb_set_red();
 	else
 		rgb_off();
-	return blink_state;
+	return red_blink_state;
+}
+
+bool rgb_blink_green_slow(void)
+{
+	green_blink_state = !green_blink_state;
+	if (green_blink_state)
+		rgb_set_green();
+	else
+		rgb_off();
+	return green_blink_state;
 }

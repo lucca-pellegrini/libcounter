@@ -17,7 +17,15 @@ static i2c_master_bus_handle_t i2c_bus = NULL;
 static bool initialized = false;
 static uint32_t last_count;
 static uint32_t last_distance_mm;
+static bool last_odd;
 static TickType_t last_refresh;
+
+/* Small filled square drawn at the top-right corner when odd. */
+#define ODD_MARKER_SEG 120
+#define ODD_MARKER_WIDTH 6
+#define ODD_MARKER_PAGE 0
+static uint8_t marker_fill[ODD_MARKER_WIDTH] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+static uint8_t marker_clear[ODD_MARKER_WIDTH] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
 ssd1306_handle_t display_get_handle(void)
 {
@@ -58,7 +66,7 @@ void display_invalidate(void)
 	initialized = false;
 }
 
-void display_update(uint32_t count, uint32_t distance_mm)
+void display_update(uint32_t count, uint32_t distance_mm, bool odd)
 {
 	if (display_handle == NULL)
 		return;
@@ -68,8 +76,9 @@ void display_update(uint32_t count, uint32_t distance_mm)
 	const bool timeout = (now - last_refresh) >= pdMS_TO_TICKS(30000);
 	const bool count_changed = count != last_count;
 	const bool distance_changed = distance_mm != last_distance_mm;
+	const bool odd_changed = odd != last_odd;
 
-	if (initialized && !count_changed && !distance_changed && !timeout)
+	if (initialized && !count_changed && !distance_changed && !odd_changed && !timeout)
 		return;
 
 	char buffer[22];
@@ -77,7 +86,7 @@ void display_update(uint32_t count, uint32_t distance_mm)
 	if (!initialized) {
 		ssd1306_clear_display(display_handle, false);
 		ssd1306_display_text(display_handle, 1, "PUC Minas", false);
-		ssd1306_display_text(display_handle, 7, "Botao p/ reset", false);
+		ssd1306_display_text(display_handle, 7, "Botao p/ zerar", false);
 	} else {
 		if (count_changed) {
 			snprintf(buffer, sizeof(buffer), "%-21s", "");
@@ -100,8 +109,14 @@ void display_update(uint32_t count, uint32_t distance_mm)
 		ssd1306_display_text(display_handle, 6, buffer, false);
 	}
 
+	/* Show/hide the top-right marker when internal-count parity changes. */
+	if (odd_changed || !initialized)
+		ssd1306_display_image(display_handle, ODD_MARKER_PAGE, ODD_MARKER_SEG, odd ? marker_fill : marker_clear,
+				      ODD_MARKER_WIDTH);
+
 	last_count = count;
 	last_distance_mm = distance_mm;
+	last_odd = odd;
 	last_refresh = now;
 	initialized = true;
 }
@@ -118,5 +133,5 @@ void display_show_reset(void)
 		return;
 
 	ssd1306_clear_display(display_handle, false);
-	ssd1306_display_text(display_handle, 3, "Resetado!", false);
+	ssd1306_display_text(display_handle, 3, "Zerado!", false);
 }

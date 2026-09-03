@@ -10,6 +10,7 @@
 #include "display.h"
 #include "button.h"
 #include "led.h"
+#include "nvs_util.h"
 
 static const char *TAG = "main";
 
@@ -62,7 +63,7 @@ static void sensor_task(void *pvParameters)
 		bool person_detected = sensor_person_detected();
 		uint32_t avg_mm = sensor_get_averaged_distance();
 
-		ESP_LOGI(TAG, "detected=%d was=%d avg=%lumm thr=%dmm", person_detected, person_was_detected,
+		ESP_LOGD(TAG, "detected=%d was=%d avg=%lumm thr=%dmm", person_detected, person_was_detected,
 			 (unsigned long)avg_mm, CONFIG_ULTRASONIC_THRESHOLD_CM * 10);
 
 		if (person_detected && !person_was_detected) {
@@ -75,11 +76,12 @@ static void sensor_task(void *pvParameters)
 				rgb_set_blue();
 
 				xSemaphoreTake(display_mutex, portMAX_DELAY);
-				display_update(get_person_count(), avg_mm);
+				uint32_t internal_count = get_person_count();
+				display_update(internal_count >> 1, avg_mm, internal_count & 1);
 				xSemaphoreGive(display_mutex);
 
 				vTaskDelay(pdMS_TO_TICKS(1000));
-				rgb_off();
+				rgb_set_orange();
 			}
 		} else if (!person_detected && person_was_detected) {
 			clear_zone_count++;
@@ -87,6 +89,7 @@ static void sensor_task(void *pvParameters)
 				person_was_detected = false;
 				detect_zone_count = 0;
 				clear_zone_count = 0;
+				rgb_off();
 				ESP_LOGI(TAG, "Person left detection zone (after %lu clear reads)",
 					 (unsigned long)CONFIG_ULTRASONIC_COOLDOWN_READS);
 			}
@@ -111,10 +114,35 @@ static void display_task(void *pvParameters)
 		}
 
 		xSemaphoreTake(display_mutex, portMAX_DELAY);
-		display_update(get_person_count(), sensor_get_averaged_distance());
+		uint32_t internal_count = get_person_count();
+		display_update(internal_count >> 1, sensor_get_averaged_distance(), internal_count & 1);
 		xSemaphoreGive(display_mutex);
 
 		vTaskDelay(xDelay);
+	}
+}
+
+static void nvs_save_task(void *pvParameters)
+{
+	const TickType_t xDelay = pdMS_TO_TICKS(CONFIG_NVS_SAVE_INTERVAL_SECONDS * 1000);
+
+	for (;;) {
+		/* Wait fixed interval regardless of paused state */
+		vTaskDelay(xDelay);
+
+		if (paused)
+			continue;
+
+		if (nvs_util_save_count(get_person_count())) {
+			/* Indicate the save with a green blink: 50ms on, 200ms off, 2s */
+			for (int i = 0; i < 8; i++) {
+				rgb_blink_green_slow();
+				vTaskDelay(pdMS_TO_TICKS(50));
+				rgb_blink_green_slow();
+				vTaskDelay(pdMS_TO_TICKS(200));
+			}
+			rgb_off();
+		}
 	}
 }
 
@@ -136,15 +164,19 @@ void app_main(void)
 		return;
 	}
 
+	nvs_util_init();
+	person_count = nvs_util_load_count();
+
 	sensor_init();
 	display_init();
 	rgb_init();
 	button_init(reset_person_count);
 
-	display_update(0, 4500);
+	display_update(person_count >> 1, 9999, person_count & 1);
 
 	xTaskCreate(sensor_task, "sensor_task", 4096, NULL, 10, NULL);
 	xTaskCreate(display_task, "display_task", 4095, NULL, 5, NULL);
+	xTaskCreate(nvs_save_task, "nvs_save_task", 4096, NULL, 3, NULL);
 
 	ESP_LOGI(TAG, "Library Counter initialized successfully");
 }
