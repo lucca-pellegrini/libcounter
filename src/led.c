@@ -12,7 +12,7 @@ static led_strip_handle_t strip = NULL;
 static bool red_blink_state = false;
 static bool green_blink_state = false;
 
-#define BRIGHTNESS 80
+#define BRIGHTNESS 128
 
 void rgb_init(void)
 {

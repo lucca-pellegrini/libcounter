@@ -80,7 +80,7 @@ static void sensor_task(void *pvParameters)
 				display_update(get_person_count(), avg_mm);
 				xSemaphoreGive(display_mutex);
 
-				vTaskDelay(pdMS_TO_TICKS(1000));
+				vTaskDelay(pdMS_TO_TICKS(200));
 				rgb_set_orange();
 			}
 		} else if (!person_detected && person_was_detected) {
