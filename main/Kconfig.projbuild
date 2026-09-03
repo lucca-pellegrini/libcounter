@@ -1,0 +1,76 @@
+menu "Library Counter Configuration"
+
+    config ULTRASONIC_TRIG_GPIO
+        int "Ultrasonic sensor TRIG GPIO"
+        default 17
+        range 0 48
+        help
+            GPIO number for the ultrasonic sensor trigger pin.
+
+    config ULTRASONIC_ECHO_GPIO
+        int "Ultrasonic sensor ECHO GPIO"
+        default 16
+        range 0 48
+        help
+            GPIO number for the ultrasonic sensor echo pin.
+
+    config ULTRASONIC_THRESHOLD_CM
+        int "Detection threshold (cm)"
+        default 50
+        range 10 400
+        help
+            Distance threshold in centimeters for person detection.
+
+    config ULTRASONIC_MEASURE_INTERVAL_MS
+        int "Measurement interval (ms)"
+        default 50
+        range 10 1000
+        help
+            Interval between ultrasonic measurements in milliseconds
+
+    config ULTRASONIC_COOLDOWN_READS
+        int "Clear-zone cooldown reads"
+        default 10
+        range 1 100
+        help
+            Number of consecutive above-threshold readings required before
+            the system will count another person. Prevents rapid recounting
+            when someone stands near the detection boundary.
+
+    config ULTRASONIC_CONFIRM_READS
+        int "Detection confirm reads"
+        default 2
+        range 1 100
+        help
+            Number of consecutive below-threshold readings required before the
+            system confirms a person is present and increments the count. At the
+            default 60 ms measurement interval, 2 reads means a person must
+            remain below the threshold for roughly 120 ms before counting.
+            Prevents false counts from noise when someone hovers near the
+            detection boundary.
+
+    config OLED_I2C_SCL_GPIO
+        int "OLED I2C SCL GPIO"
+        default 9
+        help
+            GPIO number for the OLED display I2C clock line
+
+    config OLED_I2C_SDA_GPIO
+        int "OLED I2C SDA GPIO"
+        default 8
+        help
+            GPIO number for the OLED display I2C data line
+
+    config BUTTON_GPIO
+        int "Reset Button GPIO"
+        default 5
+        help
+            GPIO number for the reset button
+
+    config RGB_LED_GPIO
+        int "Internal RGB LED GPIO"
+        default 38
+        help
+            GPIO number for the ESP32-S3 DevKit built-in RGB LED
+
+endmenu
