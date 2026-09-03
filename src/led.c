@@ -71,6 +71,14 @@ void rgb_set_green(void)
 	rgb_set(0, BRIGHTNESS, 0);
 }
 
+void rgb_rainbow(uint16_t hue)
+{
+	if (strip) {
+		led_strip_set_pixel_hsv(strip, 0, hue, 255, BRIGHTNESS);
+		led_strip_refresh(strip);
+	}
+}
+
 bool rgb_blink_red_slow(void)
 {
 	red_blink_state = !red_blink_state;

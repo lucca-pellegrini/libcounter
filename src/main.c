@@ -172,6 +172,31 @@ void app_main(void)
 	rgb_init();
 	button_init(reset_person_count);
 
+	/* Fun boot sequence: rainbow LED while cycling screens. */
+	uint16_t hue = 0;
+	TickType_t phase_start;
+
+	display_boot_puc();
+	phase_start = xTaskGetTickCount();
+	while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
+		rgb_rainbow(hue);
+		hue = (hue + 5) % 361;
+		vTaskDelay(pdMS_TO_TICKS(20));
+	}
+
+	display_boot_credits();
+	phase_start = xTaskGetTickCount();
+	while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
+		rgb_rainbow(hue);
+		hue = (hue + 5) % 361;
+		vTaskDelay(pdMS_TO_TICKS(20));
+	}
+
+	display_boot_flash();
+	vTaskDelay(pdMS_TO_TICKS(200));
+	display_clear();
+	rgb_off();
+
 	display_update(person_count >> 1, 9999, person_count & 1);
 
 	xTaskCreate(sensor_task, "sensor_task", 4096, NULL, 10, NULL);

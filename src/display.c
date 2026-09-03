@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 
 static const char *TAG = "display";
 
@@ -105,7 +106,7 @@ void display_update(uint32_t count, uint32_t distance_mm, bool odd)
 
 	if (distance_changed || !initialized) {
 		uint32_t distance_cm = distance_mm / 10;
-		snprintf(buffer, sizeof(buffer), "Medida: %lucm", (unsigned long)distance_cm);
+		snprintf(buffer, sizeof(buffer), "Medida: %5lucm", (unsigned long)distance_cm);
 		ssd1306_display_text(display_handle, 6, buffer, false);
 	}
 
@@ -132,6 +133,43 @@ void display_show_reset(void)
 	if (display_handle == NULL)
 		return;
 
+	ssd1306_clear_display(display_handle, true);
+	ssd1306_display_text(display_handle, 3, "  Zerado!", true);
+}
+
+void display_boot_puc(void)
+{
+	if (display_handle == NULL)
+		return;
+
+	ssd1306_clear_display(display_handle, true);
+	ssd1306_display_text_x3(display_handle, 1, " PUC", true);
+	ssd1306_display_text(display_handle, 4, "     Minas", true);
+	ssd1306_display_text(display_handle, 6, "  Contador de", true);
+	ssd1306_display_text(display_handle, 7, "    Pessoas", true);
+}
+
+void display_boot_credits(void)
+{
+	if (display_handle == NULL)
+		return;
+
 	ssd1306_clear_display(display_handle, false);
-	ssd1306_display_text(display_handle, 3, "Zerado!", false);
+	ssd1306_display_text(display_handle, 1, "Copyright 2026", false);
+	ssd1306_display_text(display_handle, 3, "Lucca Pellegrini", false);
+	ssd1306_display_text(display_handle, 4, "Felipe Lara", false);
+	ssd1306_display_text(display_handle, 6, "Engenharia de", false);
+	ssd1306_display_text(display_handle, 7, "Computacao", false);
+}
+
+void display_boot_flash(void)
+{
+	if (display_handle == NULL)
+		return;
+
+	/* Fill every page solid white for the flash effect. */
+	uint8_t white[128];
+	memset(white, 0xFF, sizeof(white));
+	for (uint8_t page = 0; page < 8; page++)
+		ssd1306_display_image(display_handle, page, 0, white, 128);
 }

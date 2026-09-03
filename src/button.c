@@ -35,10 +35,10 @@ static void show_confirm_prompt(void)
 {
 	ssd1306_handle_t h = display_get_handle();
 	if (h) {
-		ssd1306_clear_display(h, false);
-		ssd1306_display_text(h, 2, "Pressione", false);
-		ssd1306_display_text(h, 3, "novamente", false);
-		ssd1306_display_text(h, 4, "para zerar!", false);
+		ssd1306_clear_display(h, true);
+		ssd1306_display_text(h, 2, "  Pressione", true);
+		ssd1306_display_text(h, 3, "  novamente", true);
+		ssd1306_display_text(h, 4, "  para zerar!", true);
 	}
 }
 

@@ -25,4 +25,9 @@ void display_clear(void);
 // Show a brief "Resetado!" confirmation screen
 void display_show_reset(void);
 
+// Boot sequence screens
+void display_boot_puc(void);
+void display_boot_credits(void);
+void display_boot_flash(void);
+
 #endif // DISPLAY_H
