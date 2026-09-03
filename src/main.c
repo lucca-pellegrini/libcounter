@@ -23,6 +23,7 @@ static uint32_t detect_zone_count = 0;
 
 volatile bool paused = false;
 volatile bool debug_mode = false;
+static volatile bool boot_anim_done = false;
 
 uint32_t get_person_count(void)
 {
@@ -145,6 +146,38 @@ static void nvs_save_task(void *pvParameters)
 	}
 }
 
+/* Play the boot animation (rainbow LED cycling the PUC/credits screens). Runs as
+ * a separate task so app_main can abort it the moment the button is pressed. */
+static void boot_animation_task(void *arg)
+{
+	uint16_t hue = 0;
+	TickType_t phase_start;
+
+	display_boot_puc();
+	phase_start = xTaskGetTickCount();
+	while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
+		rgb_rainbow(hue);
+		hue = (hue + 5) % 361;
+		vTaskDelay(pdMS_TO_TICKS(20));
+	}
+
+	display_boot_credits();
+	phase_start = xTaskGetTickCount();
+	while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
+		rgb_rainbow(hue);
+		hue = (hue + 5) % 361;
+		vTaskDelay(pdMS_TO_TICKS(20));
+	}
+
+	display_boot_flash();
+	vTaskDelay(pdMS_TO_TICKS(200));
+	display_clear();
+	rgb_off();
+
+	boot_anim_done = true;
+	vTaskSuspend(NULL);
+}
+
 void app_main(void)
 {
 	ESP_LOGI(TAG, "Library Counter starting...");
@@ -180,34 +213,31 @@ void app_main(void)
 			 (unsigned long)CONFIG_DEBUG_COUNT);
 	}
 
-	/* Boot sequence (skipped in debug mode): rainbow LED while cycling screens. */
+	/* Boot animation (skipped in debug mode) runs in its own task so a button
+	 * tap can abort it immediately. */
 	if (!debug_mode) {
-		uint16_t hue = 0;
-		TickType_t phase_start;
+		TaskHandle_t anim_task = NULL;
+		xTaskCreate(boot_animation_task, "boot_anim", 4096, NULL, 4, &anim_task);
 
-		display_boot_puc();
-		phase_start = xTaskGetTickCount();
-		while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
-			rgb_rainbow(hue);
-			hue = (hue + 5) % 361;
-			vTaskDelay(pdMS_TO_TICKS(20));
-		}
+		SemaphoreHandle_t press = button_press_sem();
+		bool boot_anim_done_flag;
+		while (!boot_anim_done && xSemaphoreTake(press, pdMS_TO_TICKS(100)) != pdTRUE)
+			;
+		boot_anim_done_flag = boot_anim_done;
 
-		display_boot_credits();
-		phase_start = xTaskGetTickCount();
-		while ((xTaskGetTickCount() - phase_start) < pdMS_TO_TICKS(5000)) {
-			rgb_rainbow(hue);
-			hue = (hue + 5) % 361;
-			vTaskDelay(pdMS_TO_TICKS(20));
-		}
+		vTaskDelete(anim_task);
+		boot_anim_done = false;
 
-		display_boot_flash();
-		vTaskDelay(pdMS_TO_TICKS(200));
 		display_clear();
 		rgb_off();
+		if (!boot_anim_done_flag)
+			ESP_LOGI(TAG, "Boot animation skipped by button press");
 	}
 
 	display_update(person_count, 9999);
+
+	/* From here on the button does real things (save/reset). */
+	button_allow_actions();
 
 	xTaskCreate(sensor_task, "sensor_task", 4096, NULL, 10, NULL);
 	xTaskCreate(display_task, "display_task", 4095, NULL, 5, NULL);

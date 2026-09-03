@@ -104,7 +104,7 @@ void display_update(uint32_t count, uint32_t distance_mm)
 		ssd1306_display_text_x3(display_handle, 3, buffer, false);
 	}
 
-	if (distance_changed || !initialized) {
+	if (debug_mode && (distance_changed || !initialized)) {
 		uint32_t distance_cm = distance_mm / 10;
 		snprintf(buffer, sizeof(buffer), "Medida: %5lucm", (unsigned long)distance_cm);
 		ssd1306_display_text(display_handle, 6, buffer, false);

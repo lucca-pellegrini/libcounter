@@ -17,8 +17,13 @@ static const char *TAG = "button";
 
 static SemaphoreHandle_t button_sem = NULL;
 
+/* Gives on the press (rising) edge so other tasks (e.g. the boot animation)
+ * can be skipped as soon as the button is touched. */
+static SemaphoreHandle_t press_sem = NULL;
+
 extern volatile bool paused;
 static bool confirm_active = false;
+static volatile bool actions_allowed = false;
 
 static volatile TickType_t press_start_tick = 0;
 
@@ -34,8 +39,11 @@ static void IRAM_ATTR button_isr_handler(void *arg)
 		xSemaphoreGiveFromISR(button_sem, &xHigherPriorityTaskWoken);
 		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	} else {
-		/* Button pressed: remember when it went down. */
+		/* Button pressed: remember when it went down and signal a skip. */
 		press_start_tick = xTaskGetTickCountFromISR();
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		xSemaphoreGiveFromISR(press_sem, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 }
 
@@ -133,6 +141,12 @@ static void button_task(void *arg)
 			continue;
 		last_release = now;
 
+		/* While booting, a press only counts as a skip; nothing else. */
+		if (!actions_allowed) {
+			ESP_LOGI(TAG, "Press during boot ignored (skip only)");
+			continue;
+		}
+
 		/* Classify the press by how long it was held. */
 		uint32_t hold_ms = pdTICKS_TO_MS(now - press_start_tick);
 		if (hold_ms >= CONFIG_BUTTON_LONG_PRESS_MS)
@@ -146,6 +160,9 @@ void button_init(void)
 {
 	button_sem = xSemaphoreCreateBinary();
 	assert(button_sem != NULL);
+
+	press_sem = xSemaphoreCreateBinary();
+	assert(press_sem != NULL);
 
 	BaseType_t ret = xTaskCreate(button_task, "button_task", 4096, NULL, 5, NULL);
 	assert(ret == pdPASS);
@@ -171,4 +188,14 @@ void button_init(void)
 bool button_is_pressed(void)
 {
 	return gpio_get_level(CONFIG_BUTTON_GPIO) == 1;
+}
+
+SemaphoreHandle_t button_press_sem(void)
+{
+	return press_sem;
+}
+
+void button_allow_actions(void)
+{
+	actions_allowed = true;
 }
