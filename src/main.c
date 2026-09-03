@@ -76,8 +76,7 @@ static void sensor_task(void *pvParameters)
 				rgb_set_blue();
 
 				xSemaphoreTake(display_mutex, portMAX_DELAY);
-				uint32_t internal_count = get_person_count();
-				display_update(internal_count >> 1, avg_mm, internal_count & 1);
+				display_update(get_person_count(), avg_mm);
 				xSemaphoreGive(display_mutex);
 
 				vTaskDelay(pdMS_TO_TICKS(1000));
@@ -114,8 +113,7 @@ static void display_task(void *pvParameters)
 		}
 
 		xSemaphoreTake(display_mutex, portMAX_DELAY);
-		uint32_t internal_count = get_person_count();
-		display_update(internal_count >> 1, sensor_get_averaged_distance(), internal_count & 1);
+		display_update(get_person_count(), sensor_get_averaged_distance());
 		xSemaphoreGive(display_mutex);
 
 		vTaskDelay(xDelay);
@@ -197,7 +195,7 @@ void app_main(void)
 	display_clear();
 	rgb_off();
 
-	display_update(person_count >> 1, 9999, person_count & 1);
+	display_update(person_count, 9999);
 
 	xTaskCreate(sensor_task, "sensor_task", 4096, NULL, 10, NULL);
 	xTaskCreate(display_task, "display_task", 4095, NULL, 5, NULL);

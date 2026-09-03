@@ -18,7 +18,6 @@ static i2c_master_bus_handle_t i2c_bus = NULL;
 static bool initialized = false;
 static uint32_t last_count;
 static uint32_t last_distance_mm;
-static bool last_odd;
 static TickType_t last_refresh;
 
 /* Small filled square drawn at the top-right corner when odd. */
@@ -67,7 +66,7 @@ void display_invalidate(void)
 	initialized = false;
 }
 
-void display_update(uint32_t count, uint32_t distance_mm, bool odd)
+void display_update(uint32_t count, uint32_t distance_mm)
 {
 	if (display_handle == NULL)
 		return;
@@ -75,11 +74,10 @@ void display_update(uint32_t count, uint32_t distance_mm, bool odd)
 	TickType_t now = xTaskGetTickCount();
 
 	const bool timeout = (now - last_refresh) >= pdMS_TO_TICKS(30000);
-	const bool count_changed = count != last_count;
+	const bool count_changed = (count >> 1) != last_count;
 	const bool distance_changed = distance_mm != last_distance_mm;
-	const bool odd_changed = odd != last_odd;
 
-	if (initialized && !count_changed && !distance_changed && !odd_changed && !timeout)
+	if (initialized && !count_changed && !distance_changed && !timeout)
 		return;
 
 	char buffer[22];
@@ -100,7 +98,7 @@ void display_update(uint32_t count, uint32_t distance_mm, bool odd)
 	}
 
 	if (count_changed || !initialized) {
-		snprintf(buffer, sizeof(buffer), "%5lu", (unsigned long)count);
+		snprintf(buffer, sizeof(buffer), "%5lu", (unsigned long)(count >> 1));
 		ssd1306_display_text_x3(display_handle, 3, buffer, false);
 	}
 
@@ -110,14 +108,12 @@ void display_update(uint32_t count, uint32_t distance_mm, bool odd)
 		ssd1306_display_text(display_handle, 6, buffer, false);
 	}
 
-	/* Show/hide the top-right marker when internal-count parity changes. */
-	if (odd_changed || !initialized)
-		ssd1306_display_image(display_handle, ODD_MARKER_PAGE, ODD_MARKER_SEG, odd ? marker_fill : marker_clear,
-				      ODD_MARKER_WIDTH);
+	/* Always draw/clear the top-right marker to match current internal-count parity. */
+	ssd1306_display_image(display_handle, ODD_MARKER_PAGE, ODD_MARKER_SEG, (count & 1) ? marker_fill : marker_clear,
+			      ODD_MARKER_WIDTH);
 
-	last_count = count;
+	last_count = count >> 1;
 	last_distance_mm = distance_mm;
-	last_odd = odd;
 	last_refresh = now;
 	initialized = true;
 }
