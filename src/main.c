@@ -201,6 +201,7 @@ static void boot_animation_task(void *arg)
 	rgb_off();
 	vTaskDelay(pdMS_TO_TICKS(1500));
 
+	display_clear();
 	display_boot_credits();
 	phase_start = xTaskGetTickCount();
 	vTaskDelay(pdMS_TO_TICKS(5000));
