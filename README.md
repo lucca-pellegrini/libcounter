@@ -60,12 +60,25 @@ Tudo é ajustável via menuconfig em *Library Counter Configuration*: pinos GPIO
 
 ## Build
 
-Requer ESP-IDF fonte e `idf.py` no PATH.
+Requer [`just`](https://github.com/casey/just). Os alvos do ESP-IDF repassam seus argumentos ao `idf.py`, então `just flash monitor` equivale a `idf.py flash monitor`. Não é preciso rodar `esp-idf/export.sh` antes: se o ambiente ainda não estiver ativo, `scripts/idf.sh` o carrega só para aquele comando (sem alterar o seu shell). Se já estiver ativo, ele é usado como está.
 
 ```sh
-idf.py set-target esp32s3
-idf.py build flash monitor
+just set-target esp32s3
+just build flash monitor
+just menuconfig
+just idf <qualquer comando do idf.py>
+just                       # lista todos os alvos
 ```
+
+## Caixa (impressão 3D)
+
+O modelo OpenSCAD da caixa fica em [`case/case.scad`](case/case.scad) (protoboard de 830 pontos, tampa deslizante, janela do display e furo do botão na frente). Requer `openscad`.
+
+```sh
+just case    # gera build/case/base.stl, lid.stl e case.3mf (as duas peças na mesma mesa)
+```
+
+Os parâmetros (dimensões, folgas, posição do display/botão etc.) ficam no topo do `.scad`. Note que `just fullclean` apaga todo o `build/`, inclusive `build/case`.
 
 ## Licença
 
