@@ -1,3 +1,7 @@
+---
+lang: pt-BR
+---
+
 # libcounter
 
 Protótipo de contador de pessoas para a biblioteca do prédio 4 da PUC Minas, Unidade Lourdes. Substitui um contador comercial a laser (que parou de funcionar) por um firmware em **ESP32-S3** e **ESP-IDF**, baseado em sensor ultrassônico.
@@ -23,7 +27,7 @@ Projeto para **ESP-IDF 6.1.0** (submódulo). Componentes externos (via Component
 
 ## Funcionamento
 
-- **Contagem**: uma tarefa de alta prioridade mede a distância periodicamente (50 ms). Uma média móvel de 3 leituras suaviza ruído. Uma pessoa é contada somente após `CONFIRM_READS` (2) leituras consecutivas abaixo do limiar (50 cm), e o próximo objeto só é contado após `COOLDOWN_READS` (10) leituras limpas consecutivas. O contador interno incrementa de 2 em 2; o bit 0 marca alguém passando no momento (quadradinho no canto superior do display).
+- **Contagem**: uma tarefa de alta prioridade mede a distância periodicamente (50 ms). Uma média móvel de 3 leituras suaviza ruído. Uma pessoa é contada somente após `CONFIRM_READS` (2) leituras consecutivas abaixo do limiar (50 cm), e o próximo objeto só é contado após `COOLDOWN_READS` (10) leituras limpas consecutivas. O contador interno incrementa a cada 2; o bit 0 marca alguém passando no momento (quadradinho no canto superior do display).
 - **Persistência (NVS)**: o valor é salvo automaticamente a cada `NVS_SAVE_INTERVAL_SECONDS` (300 s), pulando a escrita quando inalterado. Isso reduz o desgaste do NVS mantendo, no máximo, uma hora (em uma passagem) de perda em caso de queda de energia.
 - **Botão**:
   - Toque curto inicia fluxo de **zerar** o contador para o dia seguinte; confirme na tela com um segundo toque dentro de 5 s.
@@ -78,7 +82,7 @@ O modelo OpenSCAD da caixa fica em [`case/case.scad`](case/case.scad) (protoboar
 just case    # gera build/case/base.stl, lid.stl e case.3mf (as duas peças na mesma mesa)
 ```
 
-Os parâmetros (dimensões, folgas, posição do display/botão etc.) ficam no topo do `.scad`. Note que `just fullclean` apaga todo o `build/`, inclusive `build/case`.
+Os parâmetros (dimensões, folgas, posição do display ou do botão, &c.) ficam no topo do `.scad`. Note que `just fullclean` apaga todo o `build/`, inclusive `build/case`.
 
 ## Licença
 
